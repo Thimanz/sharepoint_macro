@@ -2,3 +2,4 @@ python-dotenv
 Office365-REST-Python-Client
 pandas
 openpyxl
+selenium
