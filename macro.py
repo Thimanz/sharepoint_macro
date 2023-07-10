@@ -7,7 +7,8 @@ from selenium.webdriver.common.by import By
 import io
 from dotenv import load_dotenv
 import os
-import pandas as pd
+import openpyxl
+from tempfile import NamedTemporaryFile
 
 load_dotenv()
 
@@ -23,6 +24,7 @@ if ctx_auth.acquire_token_for_user(username, password):
   ctx = ClientContext(sharepoint_site, ctx_auth)
   web = ctx.web
   ctx.load(web)
+  #file will be used to update later
   file = ctx.web.get_file_by_server_relative_url(relative_url)
   ctx.load(file)
   ctx.execute_query()
@@ -35,26 +37,24 @@ bytes_file_obj = io.BytesIO()
 bytes_file_obj.write(response.content)
 bytes_file_obj.seek(0) #set file object to start
 
-#get worksheet name
-worksheet = os.getenv("WORKSHEET_NAME")
-
-#read excel file and each sheet into pandas dataframe 
-df = pd.read_excel(bytes_file_obj, sheet_name = None)[worksheet]
-
 #get data from webpage
 driver = webdriver.Chrome()
 driver.get("https://pt.wikipedia.org/wiki/Segunda_Guerra_Mundial")
-texto = driver.find_element(By.CLASS_NAME, "mw-page-title-main").text
+text = driver.find_element(By.CLASS_NAME, "mw-page-title-main").text
 
-#update df with new row
-new_row = pd.Series({'aaa':texto, 'bbb':24000, 'ccc':'55days', 'ddd':1800})
-df = pd.concat([df, new_row.to_frame().T], ignore_index=True)
+#manipulate worksheet with openpyxl
+workbook = openpyxl.load_workbook(bytes_file_obj)
+worksheet = workbook[os.getenv("WORKSHEET_NAME")]
 
-# Save updated pandas dataframe to memory as Excel file
-updated_excel = io.BytesIO()
-with pd.ExcelWriter(updated_excel) as writer:
-    df.to_excel(writer, index=False, sheet_name=worksheet)
-updated_excel.seek(0)
+worksheet.append((text, 132, "olha", 4132))
+
+#save updated excel file to memory
+with NamedTemporaryFile(delete=False) as tmp:
+  workbook.save(tmp.name)
+  tmp.seek(0)
+  updated_excel = tmp.read()
+  tmp.close()
+  os.remove(tmp.name)
 
 # Upload updated Excel file to SharePoint and overwrite existing file
 if ctx_auth.acquire_token_for_user(username, password):
